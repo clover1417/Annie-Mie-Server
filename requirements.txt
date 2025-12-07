@@ -1,0 +1,37 @@
+#pip upgrade
+--extra-index-url https://download.pytorch.org/whl/cu130
+
+# Core ML/AI Frameworks
+torch>=2.0.0
+torchaudio>=2.0.0
+torchvision>=0.15.0
+transformers>=4.37.0
+torchcodec>=0.5.0
+
+# Hugging Face Utilities
+huggingface_hub[cli,hf_xet]>=0.20.0
+hf_transfer>=0.1.0
+
+# Quantization and Acceleration
+bitsandbytes>=0.41.0
+accelerate>=0.25.0
+
+# Qwen Multimodal
+qwen-omni-utils
+
+# RAG & Vector Database
+qdrant-client>=1.7.0
+sentence-transformers>=2.2.0
+
+# Image Processing (for video frames)
+opencv-python>=4.8.0
+pillow>=10.0.0
+
+# Communication
+websockets>=12.0
+
+# Utilities
+numpy>=1.24.0
+
+# Configuration
+python-dotenv>=1.0.0

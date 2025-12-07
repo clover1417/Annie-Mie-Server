@@ -1,0 +1,35 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.py[cod]
+*$py.class
+*.egg-info/
+dist/
+build/
+.eggs/
+
+# Virtual Environment
+venv/
+
+# Environment Variables
+.env
+
+# IDE
+.vscode/
+.idea/
+*.sw[op]
+.DS_Store
+
+# Data
+data/conversation/conversation_log.json
+data/recordings/
+data/gemini_file_cache.json
+
+# Logs
+*.log
+nul
+
+# Model Cache
+.cache/
+huggingface/

@@ -1,7 +1,6 @@
 import asyncio
 import websockets
 import json
-import queue
 from pathlib import Path
 from typing import List
 
@@ -10,7 +9,7 @@ from config import MessageType, StatusType, StatsType
 from utils.logger import logger
 from utils.recording_saver import RecordingSaver
 
-from core.model.qwen_inference import QwenSession
+from core.model.vllm_inference import QwenSession
 from core.conversation.conversation_manager import ConversationManager
 from core.rag.rag_manager import RAGManager
 from core.functions import FunctionExecutor, FunctionHandler
@@ -193,52 +192,65 @@ class AnnieMieServer:
         iteration = 0
         accumulated_response = ""
 
-        while iteration < max_function_iterations:
-            iteration += 1
+        try:
+            while iteration < max_function_iterations:
+                iteration += 1
 
-            response = await self._stream_generation(
-                websocket=websocket,
-                identity_context=identity_context,
-                is_continuation=(iteration > 1)
-            )
+                response = await self._stream_generation(
+                    websocket=websocket,
+                    identity_context=identity_context,
+                    is_continuation=(iteration > 1)
+                )
 
-            if FunctionHandler.has_function_calls(response):
-                logger.info(f"Function calls detected in response (iteration {iteration})")
-                
-                function_calls = FunctionHandler.parse_function_calls(response)
-                
-                function_results = []
-                for call in function_calls:
-                    is_valid, error = FunctionHandler.validate_function_call(call)
+                if FunctionHandler.has_function_calls(response):
+                    logger.info(f"Function calls detected in response (iteration {iteration})")
                     
-                    if is_valid:
-                        result = self.function_executor.execute(
-                            call["name"],
-                            call["arguments"]
-                        )
-                        formatted_result = FunctionHandler.format_function_result(
-                            call["name"],
-                            result
-                        )
-                        function_results.append(formatted_result)
-                        logger.info(f"Executed function: {call['name']}")
-                    else:
-                        function_results.append(f"[Function error: {error}]")
-                        logger.warning(f"Invalid function call: {error}")
+                    function_calls = FunctionHandler.parse_function_calls(response)
+                    
+                    function_results = []
+                    for call in function_calls:
+                        is_valid, error = FunctionHandler.validate_function_call(call)
+                        
+                        if is_valid:
+                            result = self.function_executor.execute(
+                                call["name"],
+                                call["arguments"]
+                            )
+                            formatted_result = FunctionHandler.format_function_result(
+                                call["name"],
+                                result
+                            )
+                            function_results.append(formatted_result)
+                            logger.info(f"Executed function: {call['name']}")
+                        else:
+                            function_results.append(f"[Function error: {error}]")
+                            logger.warning(f"Invalid function call: {error}")
 
-                clean_response = FunctionHandler.remove_function_calls(response)
-                accumulated_response += clean_response
+                    clean_response = FunctionHandler.remove_function_calls(response)
+                    accumulated_response += clean_response
 
-                if function_results:
-                    results_text = "\n".join(function_results)
-                    self.conversation.add_system_note(f"Function results:\n{results_text}")
+                    if function_results:
+                        results_text = "\n".join(function_results)
+                        self.conversation.add_system_note(f"Function results:\n{results_text}")
 
-            else:
-                accumulated_response += response
-                break
+                else:
+                    accumulated_response += response
+                    break
 
-        await websocket.send(MessageBuilder.text_token("", final=True))
-        await websocket.send(MessageBuilder.status(StatusType.DONE))
+        except Exception as e:
+            logger.error(f"Generation error: {e}")
+            accumulated_response = f"[Error: {str(e)}]"
+        
+        finally:
+            # ALWAYS send completion signals no matter what
+            try:
+                logger.debug("📤 Sending final=True message")
+                await websocket.send(MessageBuilder.text_token("", final=True))
+                logger.debug("📤 Sending status=done message")
+                await websocket.send(MessageBuilder.status(StatusType.DONE))
+                logger.debug("✅ Completion signals sent successfully")
+            except Exception as e:
+                logger.error(f"Failed to send completion signals: {e}")
 
         return accumulated_response.strip()
 
@@ -248,64 +260,62 @@ class AnnieMieServer:
         identity_context: str = None,
         is_continuation: bool = False
     ) -> str:
-        token_queue = queue.Queue()
-        stats_queue = queue.Queue()
-
+        first_token_sent = False
+        pending_sends = []  # Track pending send tasks
+        
+        async def send_token(token: str):
+            msg = MessageBuilder.text_token(token)
+            logger.debug(f"📤 WS SEND token: {repr(token[:50] if len(token) > 50 else token)}")
+            try:
+                await websocket.send(msg)
+            except Exception as e:
+                logger.error(f"❌ Failed to send token: {e}")
+        
+        async def send_stats(stat_type: str, data):
+            if stat_type == "first_token":
+                msg = MessageBuilder.stats_first_token(data)
+                logger.debug(f"📤 WS SEND first_token: {data}")
+            elif stat_type == "complete":
+                msg = MessageBuilder.stats_complete(
+                    data["tokens"],
+                    data["time"],
+                    data["tok_per_sec"]
+                )
+                logger.debug(f"📤 WS SEND complete: {data}")
+            elif stat_type == "error":
+                msg = MessageBuilder.error(data)
+                logger.debug(f"📤 WS SEND error: {data}")
+            else:
+                return
+            try:
+                await websocket.send(msg)
+            except Exception as e:
+                logger.error(f"❌ Failed to send stats: {e}")
+        
+        # Sync wrappers for callbacks (called from sync code path in generate)
         def token_callback(token: str):
-            token_queue.put(("token", token))
-
+            loop = asyncio.get_event_loop()
+            task = loop.create_task(send_token(token))
+            pending_sends.append(task)
+        
         def stats_callback(stat_type: str, data):
-            stats_queue.put((stat_type, data))
-
-        async def stream_data():
-            while True:
-                token_received = False
-                stats_received = False
-
-                try:
-                    msg_type, data = token_queue.get(timeout=0.01)
-                    if msg_type == "stop":
-                        break
-                    await websocket.send(MessageBuilder.text_token(data))
-                    token_received = True
-                except queue.Empty:
-                    pass
-
-                try:
-                    stat_type, stat_data = stats_queue.get_nowait()
-                    if stat_type == "first_token":
-                        await websocket.send(MessageBuilder.stats_first_token(stat_data))
-                    elif stat_type == "complete":
-                        await websocket.send(MessageBuilder.stats_complete(
-                            stat_data["tokens"],
-                            stat_data["time"],
-                            stat_data["tok_per_sec"]
-                        ))
-                    elif stat_type == "error":
-                        await websocket.send(MessageBuilder.error(stat_data))
-                    stats_received = True
-                except queue.Empty:
-                    pass
-
-                if not token_received and not stats_received:
-                    await asyncio.sleep(0.01)
+            loop = asyncio.get_event_loop()
+            task = loop.create_task(send_stats(stat_type, data))
+            pending_sends.append(task)
 
         try:
-            generation_task = asyncio.get_event_loop().run_in_executor(
-                None,
-                lambda: self.qwen_session.generate(
-                    self.conversation.get_history(),
-                    token_callback,
-                    stats_callback,
-                    identity_context
-                )
+            response = await self.qwen_session.generate_async(
+                self.conversation.get_history(),
+                token_callback,
+                stats_callback,
+                identity_context
             )
-
-            streaming_task = asyncio.create_task(stream_data())
-
-            response = await generation_task
-            token_queue.put(("stop", None))
-            await streaming_task
+            
+            # Wait for all pending sends to complete
+            if pending_sends:
+                logger.debug(f"⏳ Waiting for {len(pending_sends)} pending sends...")
+                await asyncio.gather(*pending_sends, return_exceptions=True)
+                logger.debug(f"✅ All sends completed")
 
             return response
 

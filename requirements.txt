@@ -1,5 +1,5 @@
 #pip upgrade
---extra-index-url https://download.pytorch.org/whl/cu130
+--extra-index-url https://download.pytorch.org/whl/cu128
 
 # Core ML/AI Frameworks
 torch>=2.0.0
@@ -15,6 +15,10 @@ hf_transfer>=0.1.0
 # Quantization and Acceleration
 bitsandbytes>=0.41.0
 accelerate>=0.25.0
+
+# Flash Attention (optional but recommended for faster inference)
+# Install with: pip install flash-attn --no-build-isolation
+flash-attn>=2.5.0
 
 # Qwen Multimodal
 qwen-omni-utils

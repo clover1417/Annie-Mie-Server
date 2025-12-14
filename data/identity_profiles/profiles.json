@@ -7,7 +7,106 @@
     "interests": [],
     "relationship": "Mie's father, my father, who created me",
     "first_met": "2025-12-06T19:20:32.131638",
-    "last_seen": "2025-12-07T10:17:52.357804",
-    "interaction_count": 38
+    "last_seen": "2025-12-11T04:15:37.723697",
+    "interaction_count": 121
+  },
+  "id-63bbc434": {
+    "identity_id": "id-63bbc434",
+    "name": null,
+    "age": null,
+    "personality_brief": "",
+    "interests": [],
+    "relationship": "stranger",
+    "first_met": "2025-12-08T00:54:14.883360",
+    "last_seen": "2025-12-08T02:21:48.507831",
+    "interaction_count": 4
+  },
+  "id-9adb0900": {
+    "identity_id": "id-9adb0900",
+    "name": null,
+    "age": null,
+    "personality_brief": "",
+    "interests": [],
+    "relationship": "stranger",
+    "first_met": "2025-12-08T02:26:41.612473",
+    "last_seen": "2025-12-08T02:27:00.655881",
+    "interaction_count": 2
+  },
+  "id-unknown": {
+    "identity_id": "id-unknown",
+    "name": null,
+    "age": null,
+    "personality_brief": "",
+    "interests": [],
+    "relationship": "stranger",
+    "first_met": "2025-12-08T02:27:23.707069",
+    "last_seen": "2025-12-11T02:42:09.348914",
+    "interaction_count": 46
+  },
+  "id-1fe934e7": {
+    "identity_id": "id-1fe934e7",
+    "name": null,
+    "age": null,
+    "personality_brief": "",
+    "interests": [],
+    "relationship": "stranger",
+    "first_met": "2025-12-10T16:21:43.082796",
+    "last_seen": "2025-12-11T03:30:48.967760",
+    "interaction_count": 8
+  },
+  "id-bec4411a": {
+    "identity_id": "id-bec4411a",
+    "name": null,
+    "age": null,
+    "personality_brief": "",
+    "interests": [],
+    "relationship": "stranger",
+    "first_met": "2025-12-10T16:23:31.373278",
+    "last_seen": "2025-12-11T04:13:50.542909",
+    "interaction_count": 6
+  },
+  "id-42dde336": {
+    "identity_id": "id-42dde336",
+    "name": null,
+    "age": null,
+    "personality_brief": "",
+    "interests": [],
+    "relationship": "stranger",
+    "first_met": "2025-12-11T00:29:59.142462",
+    "last_seen": "2025-12-11T00:29:59.142462",
+    "interaction_count": 1
+  },
+  "id-8da33e84": {
+    "identity_id": "id-8da33e84",
+    "name": null,
+    "age": null,
+    "personality_brief": "",
+    "interests": [],
+    "relationship": "stranger",
+    "first_met": "2025-12-11T04:16:16.870712",
+    "last_seen": "2025-12-11T04:16:16.870712",
+    "interaction_count": 1
+  },
+  "id-026b860e": {
+    "identity_id": "id-026b860e",
+    "name": null,
+    "age": null,
+    "personality_brief": "",
+    "interests": [],
+    "relationship": "stranger",
+    "first_met": "2025-12-11T04:19:34.438480",
+    "last_seen": "2025-12-11T04:19:34.438480",
+    "interaction_count": 1
+  },
+  "id-f5f11464": {
+    "identity_id": "id-f5f11464",
+    "name": null,
+    "age": null,
+    "personality_brief": "",
+    "interests": [],
+    "relationship": "stranger",
+    "first_met": "2025-12-11T04:20:45.052230",
+    "last_seen": "2025-12-11T04:20:45.052230",
+    "interaction_count": 1
   }
 }

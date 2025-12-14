@@ -52,10 +52,21 @@ class QwenSession:
 
         logger.success(f"Base system instruction loaded ({len(self.base_system_instruction)} chars)")
 
+        # CUDA optimizations
         torch.backends.cuda.matmul.allow_tf32 = True
         torch.backends.cudnn.allow_tf32 = True
+        torch.backends.cudnn.benchmark = True
+        
+        # Set default CUDA device
+        if torch.cuda.is_available():
+            torch.cuda.set_device(0)
+            # Clear any cached memory before loading
+            torch.cuda.empty_cache()
 
         bnb_config = None
+        model_dtype = torch.bfloat16
+        use_device_map = "auto"
+        
         if QWEN_QUANTIZATION == "4bit":
             logger.info("Setting up 4-bit quantization config...")
             bnb_config = BitsAndBytesConfig(
@@ -69,6 +80,14 @@ class QwenSession:
             bnb_config = BitsAndBytesConfig(
                 load_in_8bit=True
             )
+        elif QWEN_QUANTIZATION == "none" or QWEN_QUANTIZATION is None or QWEN_QUANTIZATION == "":
+            # No quantization - full precision mode for maximum speed
+            # Requires significant VRAM (~60GB+ for 30B model)
+            logger.info("Setting up NO quantization mode (full bfloat16 precision)...")
+            logger.info("This requires ~60GB+ VRAM but provides fastest inference")
+            model_dtype = torch.bfloat16
+            # Use single GPU device directly to avoid device_map overhead
+            use_device_map = "cuda:0"
 
         logger.info("Loading processor...")
         self.processor = Qwen3OmniMoeProcessor.from_pretrained(
@@ -76,29 +95,64 @@ class QwenSession:
             trust_remote_code=True
         )
 
-        logger.info(f"Loading model with {QWEN_QUANTIZATION or 'no'} quantization...")
-        self.model = Qwen3OmniMoeForConditionalGeneration.from_pretrained(
-            self.model_id,
-            quantization_config=bnb_config,
-            device_map="auto",
-            trust_remote_code=True,
-            attn_implementation="sdpa"
-        )
+        logger.info(f"Loading model with {QWEN_QUANTIZATION or 'none'} quantization...")
+        
+        # Build model kwargs
+        model_kwargs = {
+            "trust_remote_code": True,
+            "attn_implementation": "flash_attention_2",  # Use flash attention for speed
+        }
+        
+        if bnb_config is not None:
+            # Quantized mode
+            model_kwargs["quantization_config"] = bnb_config
+            model_kwargs["device_map"] = "auto"
+        else:
+            # No quantization mode - load directly to GPU with full precision
+            model_kwargs["torch_dtype"] = model_dtype
+            model_kwargs["device_map"] = use_device_map
+            # Low CPU memory usage during loading
+            model_kwargs["low_cpu_mem_usage"] = True
+        
+        try:
+            self.model = Qwen3OmniMoeForConditionalGeneration.from_pretrained(
+                self.model_id,
+                **model_kwargs
+            )
+        except Exception as e:
+            # Fallback if flash_attention_2 is not available
+            logger.warning(f"Flash Attention 2 not available: {e}")
+            logger.info("Falling back to SDPA attention...")
+            model_kwargs["attn_implementation"] = "sdpa"
+            self.model = Qwen3OmniMoeForConditionalGeneration.from_pretrained(
+                self.model_id,
+                **model_kwargs
+            )
 
         if hasattr(self.model.config, 'return_audio'):
             self.model.config.return_audio = False
 
         torch.set_float32_matmul_precision("medium")
 
-        try:
-            logger.info("Attempting torch.compile optimization...")
-            self.model = torch.compile(self.model, mode="reduce-overhead")
-            logger.success("Model compiled successfully")
-        except Exception as e:
-            logger.warning(f"torch.compile not available: {e}")
-            logger.info("Continuing without compilation...")
+        # Skip torch.compile for no-quantization mode - it adds latency on first inference
+        if QWEN_QUANTIZATION not in ["none", None, ""]:
+            try:
+                logger.info("Attempting torch.compile optimization...")
+                self.model = torch.compile(self.model, mode="reduce-overhead")
+                logger.success("Model compiled successfully")
+            except Exception as e:
+                logger.warning(f"torch.compile not available: {e}")
+                logger.info("Continuing without compilation...")
+        else:
+            logger.info("Skipping torch.compile for no-quantization mode (faster first token)")
 
         self.model.eval()
+        
+        # Log VRAM usage
+        if torch.cuda.is_available():
+            allocated = torch.cuda.memory_allocated() / 1024**3
+            reserved = torch.cuda.memory_reserved() / 1024**3
+            logger.info(f"GPU Memory - Allocated: {allocated:.2f}GB, Reserved: {reserved:.2f}GB")
 
         logger.success(f"Model loaded on device: {self.model.device}")
 

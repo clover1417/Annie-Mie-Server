@@ -33,3 +33,12 @@ nul
 # Model Cache
 .cache/
 huggingface/
+# vLLM build (large)
+vllm_qwen/
+vllm.egg-info/
+
+# Server runtime data
+server/data/
+
+# Docker
+.dockerignore

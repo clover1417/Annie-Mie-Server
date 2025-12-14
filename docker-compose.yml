@@ -1,0 +1,49 @@
+version: '3.8'
+
+services:
+  anniemie-server:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: anniemie-vllm
+    restart: unless-stopped
+    
+    # GPU access
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+    
+    # Environment
+    environment:
+      - HOST=0.0.0.0
+      - PORT=8765
+      - NVIDIA_VISIBLE_DEVICES=all
+      - HF_HUB_ENABLE_HF_TRANSFER=1
+      - VLLM_USE_V1=0
+    
+    # Port mapping
+    ports:
+      - "8765:8765"
+    
+    # Volume mounts for persistence
+    volumes:
+      - ./data:/app/data
+      - huggingface_cache:/root/.cache/huggingface
+    
+    # Shared memory for PyTorch DataLoader
+    shm_size: '16gb'
+    
+    # Health check
+    healthcheck:
+      test: ["CMD", "python", "-c", "import socket; s=socket.socket(); s.connect(('localhost', 8765)); s.close()"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 300s  # 5 minutes for model loading
+
+volumes:
+  huggingface_cache:

@@ -24,12 +24,18 @@ os.makedirs(QDRANT_CONTEXT_PATH, exist_ok=True)
 
 QWEN_MODEL_ID = "Qwen/Qwen3-Omni-30B-A3B-Instruct"
 QWEN_DEVICE = "cuda"
-QWEN_QUANTIZATION = "4bit"
+# Note: Quantization is handled by vLLM automatically
 QWEN_MAX_TOKENS = 512
 QWEN_TEMPERATURE = 1.0
 QWEN_TOP_P = 0.8
 QWEN_TOP_K = 30
 QWEN_DO_SAMPLE = True
+
+# vLLM-specific configuration
+VLLM_GPU_MEMORY_UTILIZATION = float(os.getenv("VLLM_GPU_MEMORY_UTILIZATION", "0.90"))
+VLLM_MAX_MODEL_LEN = int(os.getenv("VLLM_MAX_MODEL_LEN", "16384"))  # Reduced to allow more MM embeddings
+VLLM_MAX_NUM_SEQS = int(os.getenv("VLLM_MAX_NUM_SEQS", "8"))
+VLLM_LIMIT_MM_PER_PROMPT = int(os.getenv("VLLM_LIMIT_MM_PER_PROMPT", "4"))  # 4 works on A100 80GB
 
 CONTEXT_COLLECTION = "context_memories"
 
